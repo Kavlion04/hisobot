@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getResponses } from "@/lib/store";
-import { sendReport, sendWelcome, telegramApi } from "@/lib/telegram";
+import { clearResponses, getResponses } from "@/lib/store";
+import {
+  botKeyboard,
+  isAdminChat,
+  sendClearedAndReport,
+  sendReport,
+  sendWelcome,
+  telegramApi,
+} from "@/lib/telegram";
 
 type TelegramUpdate = {
   message?: {
@@ -15,6 +22,19 @@ type TelegramUpdate = {
   };
 };
 
+async function handleClear(chatId: number) {
+  if (!isAdminChat(chatId)) {
+    await telegramApi("sendMessage", {
+      chat_id: chatId,
+      text: "⛔ Faqat admin /clear qila oladi.",
+      parse_mode: "HTML",
+    });
+    return;
+  }
+  const removed = await clearResponses();
+  await sendClearedAndReport(chatId, removed);
+}
+
 export async function POST(req: NextRequest) {
   try {
     const update = (await req.json()) as TelegramUpdate;
@@ -26,9 +46,12 @@ export async function POST(req: NextRequest) {
         callback_query_id: cq.id,
       });
 
-      if (cq.data === "report" && chatId != null) {
+      if (chatId != null && cq.data === "report") {
         const responses = await getResponses();
         await sendReport(chatId, responses);
+      }
+      if (chatId != null && cq.data === "clear") {
+        await handleClear(chatId);
       }
       return NextResponse.json({ ok: true });
     }
@@ -40,7 +63,6 @@ export async function POST(req: NextRequest) {
 
     const text = msg.text.trim();
     const chatId = msg.chat.id;
-    // /hisobot@BotName → /hisobot
     const command = text.split(/\s+/)[0].split("@")[0].toLowerCase();
 
     if (command === "/start" || command === "start") {
@@ -59,6 +81,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true });
     }
 
+    if (
+      command === "/clear" ||
+      command === "clear" ||
+      text === "🗑 Tozalash" ||
+      text.toLowerCase() === "tozalash"
+    ) {
+      await handleClear(chatId);
+      return NextResponse.json({ ok: true });
+    }
+
     if (text === "ℹ️ Yordam" || command === "/help" || command === "yordam") {
       await sendWelcome(chatId);
       return NextResponse.json({ ok: true });
@@ -67,12 +99,9 @@ export async function POST(req: NextRequest) {
     await telegramApi("sendMessage", {
       chat_id: chatId,
       text:
-        "Buyruqlar:\n/start — menyu\n/hisobot — to‘liq hisobot\n\nYoki pastdagi <b>📊 Hisobot</b> tugmasini bosing.",
+        "Buyruqlar:\n/start — menyu\n/hisobot — hisobot\n/clear — tozalash va yangilash",
       parse_mode: "HTML",
-      reply_markup: {
-        keyboard: [[{ text: "📊 Hisobot" }, { text: "ℹ️ Yordam" }]],
-        resize_keyboard: true,
-      },
+      reply_markup: botKeyboard(),
     });
 
     return NextResponse.json({ ok: true });

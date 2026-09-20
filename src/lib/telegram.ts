@@ -282,19 +282,52 @@ export async function sendWelcome(chatId: number | string) {
       "Bu bot orqali:",
       "• har yangi javobdan xabar olasiz",
       "• <b>/hisobot</b> bilan to‘liq statistikani ko‘rasiz",
+      "• <b>/clear</b> bilan barcha javoblarni tozalaysiz",
       "",
       "<b>Buyruqlar</b>",
       "/start — menyu",
       "/hisobot — natijalar",
+      "/clear — tozalash va hisobotni yangilash",
       "",
       "Pastdagi tugmadan ham foydalanishingiz mumkin 👇",
     ].join("\n"),
     parse_mode: "HTML",
-    reply_markup: {
-      keyboard: [[{ text: "📊 Hisobot" }, { text: "ℹ️ Yordam" }]],
-      resize_keyboard: true,
-    },
+    reply_markup: botKeyboard(),
   });
+}
+
+export function botKeyboard() {
+  return {
+    keyboard: [
+      [{ text: "📊 Hisobot" }, { text: "🗑 Tozalash" }],
+      [{ text: "ℹ️ Yordam" }],
+    ],
+    resize_keyboard: true,
+  };
+}
+
+export function isAdminChat(chatId: number | string) {
+  const admin = adminChatId();
+  if (!admin) return true; // chat id yo‘q bo‘lsa ruxsat (dev)
+  return String(chatId) === String(admin);
+}
+
+export async function sendClearedAndReport(
+  chatId: number | string,
+  removed: number
+) {
+  await telegramApi("sendMessage", {
+    chat_id: chatId,
+    text: [
+      "🗑 <b>Tozalandi</b>",
+      DIVIDER,
+      `O‘chirilgan javoblar: <b>${removed}</b>`,
+      "Hisobot yangilandi 👇",
+    ].join("\n"),
+    parse_mode: "HTML",
+    reply_markup: botKeyboard(),
+  });
+  await sendReport(chatId, []);
 }
 
 export async function sendReport(
@@ -313,7 +346,10 @@ export async function sendReport(
         i === chunks.length - 1
           ? {
               inline_keyboard: [
-                [{ text: "🔄 Hisobotni yangilash", callback_data: "report" }],
+                [
+                  { text: "🔄 Hisobotni yangilash", callback_data: "report" },
+                  { text: "🗑 Tozalash", callback_data: "clear" },
+                ],
               ],
             }
           : undefined,

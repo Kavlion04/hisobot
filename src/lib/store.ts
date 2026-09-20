@@ -41,3 +41,11 @@ export async function addResponse(
   await fs.writeFile(dataFile(), JSON.stringify(all, null, 2), "utf8");
   return all;
 }
+
+export async function clearResponses(): Promise<number> {
+  const prev = await getResponses();
+  const count = prev.length;
+  await ensureStore();
+  await fs.writeFile(dataFile(), "[]", "utf8");
+  return count;
+}
