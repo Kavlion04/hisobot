@@ -2,25 +2,33 @@ import { promises as fs } from "fs";
 import path from "path";
 import type { SurveyResponse } from "./types";
 
-const DATA_DIR = path.join(process.cwd(), "data");
-const DATA_FILE = path.join(DATA_DIR, "responses.json");
+function dataFile() {
+  // Vercel serverless: faqat /tmp yoziladi (ephemeral, lekin ishlaydi)
+  if (process.env.VERCEL) {
+    return path.join("/tmp", "hisobot-responses.json");
+  }
+  return path.join(process.cwd(), "data", "responses.json");
+}
 
 async function ensureStore() {
-  await fs.mkdir(DATA_DIR, { recursive: true });
+  const file = dataFile();
+  const dir = path.dirname(file);
+  await fs.mkdir(dir, { recursive: true });
   try {
-    await fs.access(DATA_FILE);
+    await fs.access(file);
   } catch {
-    await fs.writeFile(DATA_FILE, "[]", "utf8");
+    await fs.writeFile(file, "[]", "utf8");
   }
 }
 
 export async function getResponses(): Promise<SurveyResponse[]> {
-  await ensureStore();
-  const raw = await fs.readFile(DATA_FILE, "utf8");
   try {
+    await ensureStore();
+    const raw = await fs.readFile(dataFile(), "utf8");
     const parsed = JSON.parse(raw) as SurveyResponse[];
     return Array.isArray(parsed) ? parsed : [];
-  } catch {
+  } catch (err) {
+    console.error("getResponses:", err);
     return [];
   }
 }
@@ -30,6 +38,6 @@ export async function addResponse(
 ): Promise<SurveyResponse[]> {
   const all = await getResponses();
   all.unshift(response);
-  await fs.writeFile(DATA_FILE, JSON.stringify(all, null, 2), "utf8");
+  await fs.writeFile(dataFile(), JSON.stringify(all, null, 2), "utf8");
   return all;
 }
